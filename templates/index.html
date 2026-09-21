@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1 a 100 - Teste</title>
+
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+</head>
+
+<body>
+
+    <h1>1 a 100 — TESTE</h1>
+
+    <hr>
+
+    <h2>Sala</h2>
+
+    <button onclick="createRoom()">
+        Criar sala
+    </button>
+
+    <br><br>
+
+    <input
+        id="roomInput"
+        type="text"
+        maxlength="4"
+        placeholder="Código da sala"
+    >
+
+    <button onclick="joinRoom()">
+        Entrar na sala
+    </button>
+
+    <p id="roomInfo">Nenhuma sala.</p>
+
+    <hr>
+
+    <h2>Jogo</h2>
+
+    <p id="playerInfo">Jogador: -</p>
+    <p id="playersInfo">Jogadores conectados: 0/2</p>
+    <p id="phaseInfo">Fase: waiting</p>
+    <p id="livesInfo">Vidas: 3</p>
+    <p id="correctInfo">Acertos: 0/10</p>
+
+    <button id="startButton" onclick="startRound()" disabled>
+        Iniciar rodada
+    </button>
+
+    <hr>
+
+    <div id="secretArea" style="display: none;">
+        <h3>Você é o jogador da pista</h3>
+
+        <p>
+            Número secreto:
+            <strong id="secretNumber"></strong>
+        </p>
+
+        <input
+            id="clueInput"
+            type="text"
+            placeholder="Digite a pista"
+        >
+
+        <button onclick="submitClue()">
+            Enviar pista
+        </button>
+    </div>
+
+    <div id="guessArea" style="display: none;">
+        <h3>Você é o jogador que responde</h3>
+
+        <p>
+            Pista:
+            <strong id="clueText"></strong>
+        </p>
+
+        <p>Escolha uma posição:</p>
+
+        <div id="positions"></div>
+    </div>
+
+    <hr>
+
+    <h3>Lista atual</h3>
+
+    <ul id="elementsList"></ul>
+
+    <h3>Status</h3>
+
+    <p id="status"></p>
+
+
+    <script>
+
+        const socket = io();
+
+        let myPlayer = null;
+        let currentState = null;
+
+
+        function createRoom() {
+
+            socket.emit("create_room");
+
+        }
+
+
+        function joinRoom() {
+
+            const room = document
+                .getElementById("roomInput")
+                .value
+                .trim()
+                .toUpperCase();
+
+            socket.emit("join_room", {
+                room: room
+            });
+
+        }
+
+
+        function startRound() {
+
+            socket.emit("start_round");
+
+        }
+
+
+        function submitClue() {
+
+            const input = document.getElementById("clueInput");
+
+            const word = input.value.trim();
+
+            socket.emit("submit_clue", {
+                word: word
+            });
+
+        }
+
+
+        function submitAnswer(position) {
+
+            socket.emit("submit_answer", {
+                position: position
+            });
+
+        }
+
+
+        function updateState(state) {
+
+            currentState = state;
+
+            document.getElementById("playersInfo").textContent =
+                "Jogadores conectados: " +
+                state.players_connected +
+                "/2";
+
+            document.getElementById("phaseInfo").textContent =
+                "Fase: " + state.phase;
+
+            document.getElementById("livesInfo").textContent =
+                "Vidas: " + state.lives;
+
+            document.getElementById("correctInfo").textContent =
+                "Acertos: " + state.correct_answers + "/10";
+
+            renderElements(state.elements);
+
+            if (
+                state.players_connected === 2 &&
+                state.phase === "waiting"
+            ) {
+
+                document.getElementById("startButton").disabled = false;
+
+            } else {
+
+                document.getElementById("startButton").disabled = true;
+
+            }
+        }
+
+
+        function renderElements(elements) {
+
+            const list = document.getElementById("elementsList");
+
+            list.innerHTML = "";
+
+            elements.forEach(element => {
+
+                const item = document.createElement("li");
+
+                item.textContent =
+                    element.number + " — " + element.word;
+
+                list.appendChild(item);
+
+            });
+        }
+
+
+        function renderPositions(elements) {
+
+            const container =
+                document.getElementById("positions");
+
+            container.innerHTML = "";
+
+            for (
+                let position = 0;
+                position <= elements.length;
+                position++
+            ) {
+
+                const button =
+                    document.createElement("button");
+
+                button.textContent =
+                    "Posição " + position;
+
+                button.onclick = () => {
+                    submitAnswer(position);
+                };
+
+                container.appendChild(button);
+
+                container.appendChild(
+                    document.createElement("br")
+                );
+
+                container.appendChild(
+                    document.createElement("br")
+                );
+            }
+        }
+
+
+        socket.on("room_created", data => {
+
+            myPlayer = data.player;
+
+            document.getElementById("roomInfo").textContent =
+                "Sala: " + data.room;
+
+            document.getElementById("playerInfo").textContent =
+                "Jogador: " + myPlayer;
+
+            document.getElementById("roomInput").value =
+                data.room;
+
+        });
+
+
+        socket.on("room_joined", data => {
+
+            myPlayer = data.player;
+
+            document.getElementById("roomInfo").textContent =
+                "Sala: " + data.room;
+
+            document.getElementById("playerInfo").textContent =
+                "Jogador: " + myPlayer;
+
+        });
+
+
+        socket.on("room_state", data => {
+
+            updateState(data);
+
+        });
+
+
+        socket.on("round_started", data => {
+
+            updateState(data.state);
+
+            document.getElementById("status").textContent =
+                "Rodada iniciada.";
+
+        });
+
+
+        socket.on("secret_number", data => {
+
+            document.getElementById("secretArea").style.display =
+                "block";
+
+            document.getElementById("guessArea").style.display =
+                "none";
+
+            document.getElementById("secretNumber").textContent =
+                data.number;
+
+        });
+
+
+        socket.on("clue_submitted", data => {
+
+            updateState(data.state);
+
+            document.getElementById("clueText").textContent =
+                data.clue;
+
+            document.getElementById("secretArea").style.display =
+                "none";
+
+            document.getElementById("guessArea").style.display =
+                "block";
+
+            renderPositions(data.state.elements);
+
+        });
+
+
+        socket.on("round_result", data => {
+
+            document.getElementById("secretArea").style.display =
+                "none";
+
+            document.getElementById("guessArea").style.display =
+                "none";
+
+            updateState(data.state);
+
+            if (data.correct) {
+
+                document.getElementById("status").textContent =
+                    "ACERTO! Número " +
+                    data.number +
+                    " entrou na posição " +
+                    data.correct_position +
+                    ".";
+
+            } else {
+
+                document.getElementById("status").textContent =
+                    "ERRO! O número era " +
+                    data.number +
+                    ". A posição correta era " +
+                    data.correct_position +
+                    ".";
+
+            }
+
+        });
+
+
+        socket.on("next_round", data => {
+
+            updateState(data.state);
+
+        });
+
+
+        socket.on("game_over", data => {
+
+            document.getElementById("secretArea").style.display =
+                "none";
+
+            document.getElementById("guessArea").style.display =
+                "none";
+
+            updateState(data.state);
+
+            document.getElementById("status").textContent =
+                "FIM DE JOGO: " + data.result;
+
+        });
+
+
+        socket.on("player_disconnected", data => {
+
+            document.getElementById("status").textContent =
+                "O jogador " +
+                data.player +
+                " saiu da partida.";
+
+        });
+
+
+        socket.on("error_message", data => {
+
+            document.getElementById("status").textContent =
+                "ERRO: " + data.message;
+
+        });
+
+    </script>
+
+</body>
+</html>
