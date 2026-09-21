@@ -3,398 +3,710 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>1 a 100 - Teste</title>
+    <title>INTERVALO — Jogo de Associação & Estratégia</title>
 
+    <!-- Assets da Identidade Visual -->
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+
+    <!-- Open Graph Metadados -->
+    <meta property="og:title" content="Intervalo">
+    <meta property="og:description" content="Um jogo de estratégia entre dois jogadores.">
+    <meta property="og:image" content="/static/opengraph.png">
+    <meta property="og:type" content="website">
+
+    <!-- Google Fonts & FontAwesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-</head>
 
+    <style>
+        :root {
+            --bg-deep: #08090c;
+            --bg-card: #11141c;
+            --bg-surface: #171b26;
+            --gold-primary: #d4af37;
+            --gold-light: #f5eaaf;
+            --gold-dark: #8c6a15;
+            --gold-glow: rgba(212, 175, 55, 0.2);
+            --gold-border: rgba(212, 175, 55, 0.35);
+            --text-main: #f0f2f5;
+            --text-muted: #8b94a0;
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --success: #2ecc71;
+            --danger: #e74c3c;
+            --font-title: 'Cinzel', serif;
+            --font-body: 'Plus Jakarta Sans', sans-serif;
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.08) 0%, transparent 70%),
+                radial-gradient(circle at 50% 100%, rgba(17, 20, 28, 0.9) 0%, transparent 100%);
+            color: var(--text-main);
+            font-family: var(--font-body);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            overflow-x: hidden;
+        }
+
+        .ambient-border {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.85);
+            border: 1px solid var(--gold-border);
+            margin: 6px;
+            z-index: 100;
+        }
+
+        header {
+            padding: 16px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-subtle);
+            background: rgba(8, 9, 12, 0.85);
+            backdrop-filter: blur(12px);
+            z-index: 10;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-logo {
+            height: 38px;
+            object-fit: contain;
+            filter: drop-shadow(0 0 6px var(--gold-glow));
+        }
+
+        .header-logo-button {
+            padding: 0;
+            border: 0;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        .game-hud {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            background: var(--bg-card);
+            padding: 6px 20px;
+            border-radius: 30px;
+            border: 1px solid var(--gold-border);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        }
+
+        .hud-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .hud-item label {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .lives-container {
+            display: flex;
+            gap: 5px;
+        }
+
+        .heart {
+            color: var(--gold-primary);
+            filter: drop-shadow(0 0 4px var(--gold-glow));
+            transition: var(--transition);
+        }
+
+        .heart.lost {
+            color: #262a36;
+            filter: none;
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .card-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--gold-border);
+            border-radius: 12px;
+            padding: 36px 28px;
+            width: 100%;
+            max-width: 520px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+            text-align: center;
+            position: relative;
+        }
+
+        .card-panel::before {
+            content: '';
+            position: absolute;
+            top: 4px; left: 4px; right: 4px; bottom: 4px;
+            border: 1px solid rgba(212, 175, 55, 0.12);
+            border-radius: 8px;
+            pointer-events: none;
+        }
+
+        .main-logo-img {
+            display: block;
+            width: 100%;
+            max-width: 700px;
+            max-height: 300px;
+            object-fit: contain;
+            margin: 0 auto 10px;
+            filter: drop-shadow(0 0 15px var(--gold-glow));
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+            width: 100%;
+        }
+
+        .input-gold {
+            width: 100%;
+            padding: 14px 18px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-family: var(--font-body);
+            font-size: 0.95rem;
+            text-align: center;
+            letter-spacing: 2px;
+            transition: var(--transition);
+        }
+
+        .input-gold:focus {
+            outline: none;
+            border-color: var(--gold-primary);
+            box-shadow: 0 0 12px var(--gold-glow);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px 20px;
+            border: 1px solid var(--gold-primary);
+            background: linear-gradient(135deg, var(--gold-dark) 0%, var(--gold-primary) 100%);
+            color: #000;
+            font-family: var(--font-title);
+            font-weight: 700;
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--gold-glow);
+            filter: brightness(1.1);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(1);
+            border-color: var(--border-subtle);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--gold-light);
+            border: 1px solid var(--gold-border);
+        }
+
+        .btn-outline:hover:not(:disabled) {
+            background: rgba(212, 175, 55, 0.08);
+            color: #fff;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+        }
+
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-subtle);
+        }
+
+        .divider span {
+            padding: 0 12px;
+        }
+
+        .info-panel {
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--gold-border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* Cartas Estilo Premium */
+        .card-item {
+            background: linear-gradient(145deg, #161a24 0%, #0d0f17 100%);
+            border: 1px solid var(--gold-border);
+            border-radius: 10px;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            position: relative;
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .card-item::before {
+            content: '';
+            position: absolute;
+            top: 3px; left: 3px; right: 3px; bottom: 3px;
+            border: 1px solid rgba(212, 175, 55, 0.1);
+            border-radius: 7px;
+            pointer-events: none;
+        }
+
+        .card-number {
+            font-family: var(--font-title);
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--gold-primary);
+            width: 70px;
+            text-align: left;
+            text-shadow: 0 0 10px var(--gold-glow);
+        }
+
+        .card-word {
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-main);
+            flex: 1;
+            text-align: center;
+        }
+
+        /* Slots de Inserção */
+        .insert-btn {
+            width: 100%;
+            padding: 12px;
+            margin: 6px 0;
+            background: rgba(212, 175, 55, 0.03);
+            border: 1px dashed var(--gold-border);
+            border-radius: 8px;
+            color: var(--gold-light);
+            font-family: var(--font-title);
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .insert-btn:hover {
+            background: var(--gold-glow);
+            border-style: solid;
+            transform: scale(1.01);
+        }
+
+        .status-message {
+            margin-top: 15px;
+            padding: 12px;
+            background: var(--bg-surface);
+            border-radius: 6px;
+            border-left: 3px solid var(--gold-primary);
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .secret-box {
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(17, 20, 28, 0.8) 100%);
+            border: 1px solid var(--gold-primary);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            box-shadow: 0 0 25px var(--gold-glow);
+        }
+
+        .secret-number {
+            font-family: var(--font-title);
+            font-size: 3.5rem;
+            font-weight: 800;
+            color: var(--gold-light);
+            text-shadow: 0 0 15px var(--gold-glow);
+            margin: 8px 0;
+        }
+
+        @media (max-width: 600px) {
+            header { padding: 12px 16px; }
+            .header-logo { height: 28px; }
+            .card-panel { padding: 24px 16px; }
+            .main-logo-img { max-height: 110px; }
+            .card-number { font-size: 1.4rem; width: 50px; }
+            .card-word { font-size: 0.95rem; }
+        }
+    </style>
+</head>
 <body>
 
-    <h1>1 a 100 — TESTE</h1>
+    <div class="ambient-border"></div>
 
-    <hr>
+    <header>
+        <div class="header-brand">
+            <button class="header-logo-button" type="button" onclick="returnToLobby()" aria-label="Voltar ao menu principal">
+                <img src="/static/logo.png" alt="INTERVALO" class="header-logo">
+            </button>
+        </div>
 
-    <h2>Sala</h2>
+        <div class="game-hud" id="hud">
+            <div class="hud-item">
+                <label>Vidas</label>
+                <div class="lives-container" id="lives-container">
+                    <i class="fa-solid fa-heart heart"></i>
+                    <i class="fa-solid fa-heart heart"></i>
+                    <i class="fa-solid fa-heart heart"></i>
+                </div>
+            </div>
+            <div style="width: 1px; height: 16px; background: var(--border-subtle);"></div>
+            <div class="hud-item">
+                <label>Acertos</label>
+                <span id="correctInfo" style="color: var(--gold-light);">0/10</span>
+            </div>
+        </div>
+    </header>
 
-    <button onclick="createRoom()">
-        Criar sala
-    </button>
+    <main>
+        <!-- PAINEL LOBBY / CONEXÃO -->
+        <div id="lobbyArea" class="card-panel">
+            <img src="/static/banner.png" alt="INTERVALO" class="main-logo-img">
+            <p class="subtitle">Jogo de Associação & Estratégia</p>
 
-    <br><br>
+            <button class="btn" onclick="createRoom()">
+                <i class="fa-solid fa-plus"></i> Criar Nova Sala
+            </button>
 
-    <input
-        id="roomInput"
-        type="text"
-        maxlength="4"
-        placeholder="Código da sala"
-    >
+            <div class="divider"><span>OU ENTRE EM UMA SALA</span></div>
 
-    <button onclick="joinRoom()">
-        Entrar na sala
-    </button>
+            <div class="form-group">
+                <input id="roomInput" type="text" class="input-gold" maxlength="4" placeholder="CÓDIGO DA SALA" style="text-transform: uppercase;">
+            </div>
 
-    <p id="roomInfo">Nenhuma sala.</p>
+            <button class="btn btn-outline" onclick="joinRoom()">
+                <i class="fa-solid fa-right-to-bracket"></i> Entrar na Sala
+            </button>
+        </div>
 
-    <hr>
+        <!-- PAINEL DE JOGO -->
+        <div id="gameArea" style="display: none; width: 100%; max-width: 650px;">
+            
+            <div class="info-panel">
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
+                    <span id="roomInfo">Sala: -</span>
+                    <span id="playerInfo">Jogador: -</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-muted);">
+                    <span id="playersInfo">Conectados: 0/2</span>
+                    <span id="phaseInfo" style="text-transform: uppercase; color: var(--gold-light);">Fase: waiting</span>
+                </div>
+            </div>
 
-    <h2>Jogo</h2>
+            <button id="startButton" class="btn" onclick="startRound()" disabled style="margin-bottom: 20px;">
+                <i class="fa-solid fa-play"></i> Iniciar Rodada
+            </button>
 
-    <p id="playerInfo">Jogador: -</p>
-    <p id="playersInfo">Jogadores conectados: 0/2</p>
-    <p id="phaseInfo">Fase: waiting</p>
-    <p id="livesInfo">Vidas: 3</p>
-    <p id="correctInfo">Acertos: 0/10</p>
+            <!-- ÁREA DO JOGADOR DA PISTA -->
+            <div id="secretArea" class="secret-box" style="display: none;">
+                <p style="font-size: 0.8rem; letter-spacing: 2px; color: var(--gold-primary); text-transform: uppercase;">Você é o jogador da pista</p>
+                <div class="secret-number" id="secretNumber">--</div>
+                
+                <div class="form-group">
+                    <input id="clueInput" type="text" class="input-gold" placeholder="Digite a pista" autocomplete="off">
+                </div>
+                <button class="btn" onclick="submitClue()">
+                    <i class="fa-solid fa-paper-plane"></i> Enviar Pista
+                </button>
+            </div>
 
-    <button id="startButton" onclick="startRound()" disabled>
-        Iniciar rodada
-    </button>
+            <!-- ÁREA DO JOGADOR QUE RESPONDE -->
+            <div id="guessArea" class="info-panel" style="display: none; border-color: var(--gold-primary);">
+                <p style="font-size: 0.8rem; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase;">Sua vez de responder</p>
+                <h2 style="font-family: var(--font-title); color: var(--gold-light); margin: 10px 0; font-size: 1.8rem;" id="clueText">"..."</h2>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">Escolha em qual posição da sequência a pista deve ser inserida:</p>
+            </div>
 
-    <hr>
+            <!-- SEQUÊNCIA DE CARTAS (HTML/CSS DINÂMICO) -->
+            <div style="margin-top: 20px;">
+                <h3 style="font-family: var(--font-title); font-size: 1rem; letter-spacing: 2px; color: var(--gold-light); margin-bottom: 12px; text-align: center;">SEQUÊNCIA ATUAL</h3>
+                <div id="elementsContainer" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
 
-    <div id="secretArea" style="display: none;">
-        <h3>Você é o jogador da pista</h3>
-
-        <p>
-            Número secreto:
-            <strong id="secretNumber"></strong>
-        </p>
-
-        <input
-            id="clueInput"
-            type="text"
-            placeholder="Digite a pista"
-        >
-
-        <button onclick="submitClue()">
-            Enviar pista
-        </button>
-    </div>
-
-    <div id="guessArea" style="display: none;">
-        <h3>Você é o jogador que responde</h3>
-
-        <p>
-            Pista:
-            <strong id="clueText"></strong>
-        </p>
-
-        <p>Escolha uma posição:</p>
-
-        <div id="positions"></div>
-    </div>
-
-    <hr>
-
-    <h3>Lista atual</h3>
-
-    <ul id="elementsList"></ul>
-
-    <h3>Status</h3>
-
-    <p id="status"></p>
-
+            <div id="status" class="status-message">Aguardando início...</div>
+        </div>
+    </main>
 
     <script>
-
         const socket = io();
 
         let myPlayer = null;
         let currentState = null;
 
-
         function createRoom() {
-
             socket.emit("create_room");
-
         }
 
+        function returnToLobby() {
+            if (myPlayer !== null) {
+                socket.emit("leave_room");
+            }
+
+            myPlayer = null;
+            currentState = null;
+            document.getElementById("lobbyArea").style.display = "block";
+            document.getElementById("gameArea").style.display = "none";
+            document.getElementById("hud").style.display = "none";
+            document.getElementById("roomInput").value = "";
+            document.getElementById("roomInfo").textContent = "Sala: -";
+            document.getElementById("playerInfo").textContent = "Jogador: -";
+            document.getElementById("status").textContent = "Aguardando início...";
+        }
 
         function joinRoom() {
-
-            const room = document
-                .getElementById("roomInput")
-                .value
-                .trim()
-                .toUpperCase();
-
-            socket.emit("join_room", {
-                room: room
-            });
-
+            const room = document.getElementById("roomInput").value.trim().toUpperCase();
+            if (room) {
+                socket.emit("join_room", { room: room });
+            }
         }
-
 
         function startRound() {
-
             socket.emit("start_round");
-
         }
-
 
         function submitClue() {
-
             const input = document.getElementById("clueInput");
-
             const word = input.value.trim();
-
-            socket.emit("submit_clue", {
-                word: word
-            });
-
+            if (word) {
+                socket.emit("submit_clue", { word: word });
+                input.value = "";
+            }
         }
-
 
         function submitAnswer(position) {
-
-            socket.emit("submit_answer", {
-                position: position
-            });
-
+            socket.emit("submit_answer", { position: position });
         }
 
-
         function updateState(state) {
-
             currentState = state;
 
-            document.getElementById("playersInfo").textContent =
-                "Jogadores conectados: " +
-                state.players_connected +
-                "/2";
+            document.getElementById("lobbyArea").style.display = "none";
+            document.getElementById("gameArea").style.display = "block";
 
-            document.getElementById("phaseInfo").textContent =
-                "Fase: " + state.phase;
+            document.getElementById("playersInfo").textContent = "Conectados: " + state.players_connected + "/2";
+            document.getElementById("phaseInfo").textContent = "Fase: " + state.phase;
+            document.getElementById("correctInfo").textContent = state.correct_answers + "/10";
 
-            document.getElementById("livesInfo").textContent =
-                "Vidas: " + state.lives;
-
-            document.getElementById("correctInfo").textContent =
-                "Acertos: " + state.correct_answers + "/10";
+            // Atualiza vidas em ícones
+            const hearts = document.querySelectorAll("#lives-container .heart");
+            hearts.forEach((heart, idx) => {
+                if (idx < state.lives) {
+                    heart.classList.remove("lost");
+                } else {
+                    heart.classList.add("lost");
+                }
+            });
 
             renderElements(state.elements);
 
-            if (
-                state.players_connected === 2 &&
-                state.phase === "waiting"
-            ) {
-
+            // Controle do Botão Iniciar Rodada
+            const isMyTurnToStart = (myPlayer === state.current_player);
+            if (state.players_connected === 2 && state.phase === "waiting" && isMyTurnToStart) {
                 document.getElementById("startButton").disabled = false;
-
             } else {
-
                 document.getElementById("startButton").disabled = true;
+            }
 
+            // Gerenciamento visual das fases
+            if (state.phase === "waiting") {
+                document.getElementById("secretArea").style.display = "none";
+                document.getElementById("guessArea").style.display = "none";
             }
         }
-
 
         function renderElements(elements) {
-
-            const list = document.getElementById("elementsList");
-
-            list.innerHTML = "";
-
-            elements.forEach(element => {
-
-                const item = document.createElement("li");
-
-                item.textContent =
-                    element.number + " — " + element.word;
-
-                list.appendChild(item);
-
-            });
-        }
-
-
-        function renderPositions(elements) {
-
-            const container =
-                document.getElementById("positions");
-
+            const container = document.getElementById("elementsContainer");
             container.innerHTML = "";
 
-            for (
-                let position = 0;
-                position <= elements.length;
-                position++
-            ) {
+            const isGuessing = currentState && currentState.phase === "guessing";
+            const isGuesser = currentState && (myPlayer !== currentState.current_player);
+            const showSlots = isGuessing && isGuesser;
 
-                const button =
-                    document.createElement("button");
+            elements.forEach((element, index) => {
+                // Se for a fase de resposta do jogador correspondente, insere o slot de escolha
+                if (showSlots) {
+                    container.appendChild(createInsertButton(index));
+                }
 
-                button.textContent =
-                    "Posição " + position;
+                // Renderiza a carta HTML/CSS
+                const card = document.createElement("div");
+                card.className = "card-item";
+                card.innerHTML = `
+                    <span class="card-number">${element.number}</span>
+                    <span class="card-word">${element.word}</span>
+                `;
+                container.appendChild(card);
+            });
 
-                button.onclick = () => {
-                    submitAnswer(position);
-                };
-
-                container.appendChild(button);
-
-                container.appendChild(
-                    document.createElement("br")
-                );
-
-                container.appendChild(
-                    document.createElement("br")
-                );
+            // Slot final de inserção
+            if (showSlots) {
+                container.appendChild(createInsertButton(elements.length));
             }
         }
 
+        function createInsertButton(position) {
+            const btn = document.createElement("button");
+            btn.className = "insert-btn";
+            btn.innerHTML = `<i class="fa-solid fa-plus"></i> Inserir na posição ${position}`;
+            btn.onclick = () => submitAnswer(position);
+            return btn;
+        }
 
+        // Socket Events
         socket.on("room_created", data => {
-
             myPlayer = data.player;
-
-            document.getElementById("roomInfo").textContent =
-                "Sala: " + data.room;
-
-            document.getElementById("playerInfo").textContent =
-                "Jogador: " + myPlayer;
-
-            document.getElementById("roomInput").value =
-                data.room;
-
+            document.getElementById("roomInfo").textContent = "Sala: " + data.room;
+            document.getElementById("playerInfo").textContent = "Jogador: " + myPlayer;
+            document.getElementById("roomInput").value = data.room;
         });
-
 
         socket.on("room_joined", data => {
-
             myPlayer = data.player;
-
-            document.getElementById("roomInfo").textContent =
-                "Sala: " + data.room;
-
-            document.getElementById("playerInfo").textContent =
-                "Jogador: " + myPlayer;
-
+            document.getElementById("roomInfo").textContent = "Sala: " + data.room;
+            document.getElementById("playerInfo").textContent = "Jogador: " + myPlayer;
         });
-
 
         socket.on("room_state", data => {
-
+            document.getElementById("hud").style.display = "flex";
             updateState(data);
-
         });
-
 
         socket.on("round_started", data => {
-
             updateState(data.state);
-
-            document.getElementById("status").textContent =
-                "Rodada iniciada.";
-
+            document.getElementById("status").textContent = "Rodada iniciada.";
         });
-
 
         socket.on("secret_number", data => {
-
-            document.getElementById("secretArea").style.display =
-                "block";
-
-            document.getElementById("guessArea").style.display =
-                "none";
-
-            document.getElementById("secretNumber").textContent =
-                data.number;
-
+            document.getElementById("secretArea").style.display = "block";
+            document.getElementById("guessArea").style.display = "none";
+            document.getElementById("secretNumber").textContent = data.number;
         });
-
 
         socket.on("clue_submitted", data => {
-
             updateState(data.state);
+            document.getElementById("secretArea").style.display = "none";
 
-            document.getElementById("clueText").textContent =
-                data.clue;
-
-            document.getElementById("secretArea").style.display =
-                "none";
-
-            document.getElementById("guessArea").style.display =
-                "block";
-
-            renderPositions(data.state.elements);
-
+            if (myPlayer !== data.state.current_player) {
+                document.getElementById("clueText").textContent = `"${data.clue}"`;
+                document.getElementById("guessArea").style.display = "block";
+            } else {
+                document.getElementById("status").textContent = `Pista "${data.clue}" enviada. Aguardando a resposta do oponente...`;
+            }
         });
 
-
         socket.on("round_result", data => {
-
-            document.getElementById("secretArea").style.display =
-                "none";
-
-            document.getElementById("guessArea").style.display =
-                "none";
-
+            document.getElementById("secretArea").style.display = "none";
+            document.getElementById("guessArea").style.display = "none";
             updateState(data.state);
 
             if (data.correct) {
-
-                document.getElementById("status").textContent =
-                    "ACERTO! Número " +
-                    data.number +
-                    " entrou na posição " +
-                    data.correct_position +
-                    ".";
-
+                document.getElementById("status").textContent = `ACERTO! O número ${data.number} entrou na posição ${data.correct_position}.`;
             } else {
-
-                document.getElementById("status").textContent =
-                    "ERRO! O número era " +
-                    data.number +
-                    ". A posição correta era " +
-                    data.correct_position +
-                    ".";
-
+                document.getElementById("status").textContent = `ERRO! O número era ${data.number}. A posição correta era ${data.correct_position}.`;
             }
-
         });
-
 
         socket.on("next_round", data => {
-
             updateState(data.state);
-
         });
-
 
         socket.on("game_over", data => {
-
-            document.getElementById("secretArea").style.display =
-                "none";
-
-            document.getElementById("guessArea").style.display =
-                "none";
-
+            document.getElementById("secretArea").style.display = "none";
+            document.getElementById("guessArea").style.display = "none";
             updateState(data.state);
 
-            document.getElementById("status").textContent =
-                "FIM DE JOGO: " + data.result;
-
+            if (data.result === "win") {
+                document.getElementById("status").textContent = "VITÓRIA! Vocês completaram 10 acertos!";
+            } else {
+                document.getElementById("status").textContent = "FIM DE JOGO! As vidas se esgotaram.";
+            }
         });
-
 
         socket.on("player_disconnected", data => {
-
-            document.getElementById("status").textContent =
-                "O jogador " +
-                data.player +
-                " saiu da partida.";
-
+            document.getElementById("status").textContent = `O jogador ${data.player} saiu da partida. Aguardando novo jogador...`;
+            if (currentState) {
+                currentState.players_connected = 1;
+                updateState(currentState);
+            }
         });
-
 
         socket.on("error_message", data => {
-
-            document.getElementById("status").textContent =
-                "ERRO: " + data.message;
-
+            document.getElementById("status").textContent = "ERRO: " + data.message;
         });
-
     </script>
-
 </body>
 </html>

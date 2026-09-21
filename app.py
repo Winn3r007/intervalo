@@ -1,7 +1,7 @@
 import random
 
 from flask import Flask, render_template, request
-from flask_socketio import SocketIO, emit, join_room
+from flask_socketio import SocketIO, emit, join_room, leave_room
 
 from game import Game
 
@@ -424,11 +424,9 @@ def submit_answer(data):
     )
 
 
-@socketio.on("disconnect")
-def disconnect():
-
+def remove_player_from_room(player_sid):
     room_code = player_rooms.pop(
-        request.sid,
+        player_sid,
         None
     )
 
@@ -443,14 +441,14 @@ def disconnect():
     disconnected_player = None
     other_player_sid = None
 
-    for number, sid in room["players"].items():
+    for number, current_sid in room["players"].items():
 
-        if sid == request.sid:
+        if current_sid == player_sid:
             disconnected_player = number
             room["players"][number] = None
 
-        elif sid is not None:
-            other_player_sid = sid
+        elif current_sid is not None:
+            other_player_sid = current_sid
 
     socketio.emit(
         "player_disconnected",
@@ -471,6 +469,20 @@ def disconnect():
         room_code,
         None
     )
+
+
+@socketio.on("leave_room")
+def leave_current_room():
+    room_code = player_rooms.get(request.sid)
+
+    if room_code is not None:
+        leave_room(room_code)
+        remove_player_from_room(request.sid)
+
+
+@socketio.on("disconnect")
+def disconnect():
+    remove_player_from_room(request.sid)
 
 
 if __name__ == "__main__":
