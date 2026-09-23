@@ -1,4 +1,6 @@
+import math
 import random
+import time
 
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -46,6 +48,13 @@ def get_room():
 def public_game_state(room):
     game = room["game"]
 
+    timer_seconds = None
+    if room.get("timer_deadline") is not None and game.phase in ("clue", "guessing"):
+        timer_seconds = max(
+            0,
+            math.ceil(room["timer_deadline"] - time.time())
+        )
+
     players_connected = sum(
         sid is not None
         for sid in room["players"].values()
@@ -53,10 +62,13 @@ def public_game_state(room):
 
     return {
         "lives": game.lives,
+        "max_lives": game.max_lives,
         "correct_answers": game.correct_answers,
         "elements": game.elements,
         "current_player": game.current_player,
         "phase": game.phase,
+        "mode": game.mode,
+        "timer_seconds": timer_seconds,
         "players_connected": players_connected,
         "max_players": 2,
     }
@@ -75,8 +87,66 @@ def index():
     return render_template("index.html")
 
 
+def emit_round_timeout(room_code, round_id):
+    socketio.sleep(rooms.get(room_code, {}).get("game", Game()).timer_seconds or 0)
+
+    room = rooms.get(room_code)
+    if room is None or room.get("round_id") != round_id:
+        return
+
+    game = room["game"]
+    if game.phase not in ("clue", "guessing"):
+        return
+
+    secret_number = game.current_number
+    clue = game.current_word
+    correct_position = game.get_correct_position()
+    between_min = None
+    between_max = None
+
+    if correct_position is not None:
+        elements = game.elements
+        between_min = elements[correct_position - 1]["number"] if correct_position > 0 else 0
+        between_max = elements[correct_position]["number"] if correct_position < len(elements) else 100
+
+    game.timeout_round()
+    room["timer_deadline"] = None
+
+    socketio.emit(
+        "round_result",
+        {
+            "correct": False,
+            "timed_out": True,
+            "chosen_position": None,
+            "correct_position": correct_position,
+            "number": secret_number,
+            "clue": clue,
+            "between_min": between_min,
+            "between_max": between_max,
+            "state": public_game_state(room),
+        },
+        to=room_code,
+    )
+
+    if game.phase in ("win", "lose"):
+        socketio.emit(
+            "game_over",
+            {
+                "result": game.phase,
+                "state": public_game_state(room),
+            },
+            to=room_code,
+        )
+    else:
+        socketio.emit(
+            "next_round",
+            {"state": public_game_state(room)},
+            to=room_code,
+        )
+
+
 @socketio.on("create_room")
-def create_room():
+def create_room(data=None):
 
     if request.sid in player_rooms:
         emit("error_message", {
@@ -84,10 +154,18 @@ def create_room():
         })
         return
 
+    mode = data.get("mode", "normal") if isinstance(data, dict) else "normal"
+    if mode not in Game.MODE_SETTINGS:
+        mode = "normal"
+
     code = generate_room_code()
 
     rooms[code] = {
-        "game": Game(),
+        "game": Game(mode),
+        "mode": mode,
+        "round_id": 0,
+        "timer_deadline": None,
+        "reconnect_deadlines": {},
         "players": {
             1: request.sid,
             2: None
@@ -226,6 +304,10 @@ def start_round():
         })
         return
 
+    room["round_id"] += 1
+    if game.timer_seconds is not None:
+        room["timer_deadline"] = time.time() + game.timer_seconds
+
     socketio.emit(
         "round_started",
         {
@@ -238,6 +320,13 @@ def start_round():
     emit("secret_number", {
         "number": game.current_number
     })
+
+    if game.timer_seconds is not None:
+        socketio.start_background_task(
+            emit_round_timeout,
+            room_code,
+            room["round_id"],
+        )
 
 
 @socketio.on("submit_clue")
@@ -383,11 +472,21 @@ def submit_answer(data):
     clue = game.current_word
     correct_position = game.get_correct_position()
 
+    # --- NOVO: Cálculo do intervalo (mínimo e máximo) ---
+    elements = game.elements
+    pos = correct_position
+
+    between_min = elements[pos - 1]['number'] if pos > 0 else 0
+    between_max = elements[pos]['number'] if pos < len(elements) else 100
+    # ----------------------------------------------------
+
     result = game.submit_answer(
         chosen_position
     )
 
     game_state = game.phase
+    room["timer_deadline"] = None
+    room["round_id"] += 1
 
     socketio.emit(
         "round_result",
@@ -397,6 +496,8 @@ def submit_answer(data):
             "correct_position": correct_position,
             "number": secret_number,
             "clue": clue,
+            "between_min": between_min,
+            "between_max": between_max,
             "state": public_game_state(room)
         },
         to=room_code
@@ -424,7 +525,40 @@ def submit_answer(data):
     )
 
 
-def remove_player_from_room(player_sid):
+@socketio.on("restart_game")
+def restart_game():
+    room_code, room = get_room()
+
+    if room is None:
+        emit("error_message", {
+            "message": "Você não está em uma sala."
+        })
+        return
+
+    if any(sid is None for sid in room["players"].values()):
+        emit("error_message", {
+            "message": "É necessário que os dois jogadores estejam conectados."
+        })
+        return
+
+    if room["game"].phase not in ("win", "lose"):
+        emit("error_message", {
+            "message": "A partida ainda não terminou."
+        })
+        return
+
+    room["game"] = Game(room["mode"])
+    room["round_id"] += 1
+    room["timer_deadline"] = None
+
+    socketio.emit(
+        "room_state",
+        public_game_state(room),
+        to=room_code,
+    )
+
+
+def remove_player_from_room(player_sid, preserve_for_reconnect=True):
     room_code = player_rooms.pop(
         player_sid,
         None
@@ -450,6 +584,26 @@ def remove_player_from_room(player_sid):
         elif current_sid is not None:
             other_player_sid = current_sid
 
+    if preserve_for_reconnect:
+        deadline = time.time() + 15
+        room["reconnect_deadlines"][disconnected_player] = deadline
+
+        socketio.emit(
+            "player_disconnected",
+            {
+                "player": disconnected_player,
+            },
+            to=room_code,
+        )
+
+        socketio.start_background_task(
+            close_disconnected_room,
+            room_code,
+            disconnected_player,
+            deadline,
+        )
+        return
+
     socketio.emit(
         "player_disconnected",
         {
@@ -458,16 +612,69 @@ def remove_player_from_room(player_sid):
         to=room_code
     )
 
-    # A partida é encerrada quando um dos jogadores sai.
-    if other_player_sid is not None:
-        player_rooms.pop(
-            other_player_sid,
-            None
-        )
-
     rooms.pop(
         room_code,
         None
+    )
+
+
+def close_disconnected_room(room_code, player_number, deadline):
+    socketio.sleep(15)
+
+    room = rooms.get(room_code)
+    if room is None:
+        return
+
+    if room["reconnect_deadlines"].get(player_number) != deadline:
+        return
+
+    if room["players"].get(player_number) is not None:
+        return
+
+    for sid in room["players"].values():
+        if sid is not None:
+            player_rooms.pop(sid, None)
+
+    rooms.pop(room_code, None)
+
+
+@socketio.on("rejoin_room")
+def rejoin_room(data):
+    if not isinstance(data, dict):
+        emit("error_message", {"message": "Dados inválidos."})
+        return
+
+    room_code = data.get("room", "")
+    player = data.get("player")
+
+    if not isinstance(room_code, str) or player not in (1, 2):
+        emit("error_message", {"message": "Dados de reconexão inválidos."})
+        return
+
+    room_code = room_code.strip().upper()
+    room = rooms.get(room_code)
+    if room is None:
+        emit("error_message", {"message": "A sala expirou."})
+        return
+
+    deadline = room["reconnect_deadlines"].get(player)
+    if room["players"].get(player) is not None or deadline is None or deadline < time.time():
+        emit("error_message", {"message": "Não foi possível reconectar à sala."})
+        return
+
+    room["players"][player] = request.sid
+    room["reconnect_deadlines"].pop(player, None)
+    player_rooms[request.sid] = room_code
+    join_room(room_code)
+
+    emit("room_joined", {
+        "room": room_code,
+        "player": player,
+    })
+    socketio.emit(
+        "room_state",
+        public_game_state(room),
+        to=room_code,
     )
 
 
@@ -477,7 +684,7 @@ def leave_current_room():
 
     if room_code is not None:
         leave_room(room_code)
-        remove_player_from_room(request.sid)
+        remove_player_from_room(request.sid, preserve_for_reconnect=False)
 
 
 @socketio.on("disconnect")

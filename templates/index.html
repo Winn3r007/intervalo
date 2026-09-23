@@ -5,22 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INTERVALO — Jogo de Associação & Estratégia</title>
 
-    <!-- Assets da Identidade Visual -->
     <link rel="icon" type="image/png" href="/static/favicon.png">
 
-    <!-- Open Graph Metadados -->
     <meta property="og:title" content="Intervalo">
     <meta property="og:description" content="Um jogo de estratégia entre dois jogadores.">
     <meta property="og:image" content="/static/opengraph.png">
     <meta property="og:type" content="website">
 
-    <!-- Google Fonts & FontAwesome -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
 
     <style>
@@ -62,6 +58,36 @@
             flex-direction: column;
             justify-content: space-between;
             overflow-x: hidden;
+            transition: background-color 0.4s ease;
+        }
+
+        /* ANIMAÇÕES DE FEEDBACK DE ROUND */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: transparent;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 90;
+        }
+
+        body.flash-success::after {
+            animation: flashGreen 0.7s ease-in-out;
+        }
+
+        body.flash-error::after {
+            animation: flashRed 0.7s ease-in-out;
+        }
+
+        @keyframes flashGreen {
+            0%, 100% { background: transparent; opacity: 0; }
+            35% { background: rgba(46, 204, 113, 0.55); opacity: 1; }
+        }
+
+        @keyframes flashRed {
+            0%, 100% { background: transparent; opacity: 0; }
+            35% { background: rgba(231, 76, 60, 0.6); opacity: 1; }
         }
 
         .ambient-border {
@@ -146,6 +172,13 @@
             filter: none;
         }
 
+        .timer-badge {
+            color: #ffaa00;
+            font-family: var(--font-title);
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+
         main {
             flex: 1;
             display: flex;
@@ -198,9 +231,19 @@
         .form-group {
             margin-bottom: 16px;
             width: 100%;
+            text-align: left;
         }
 
-        .input-gold {
+        .form-group label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--gold-light);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        .input-gold, .select-gold {
             width: 100%;
             padding: 14px 18px;
             background: var(--bg-deep);
@@ -210,11 +253,16 @@
             font-family: var(--font-body);
             font-size: 0.95rem;
             text-align: center;
-            letter-spacing: 2px;
+            letter-spacing: 1px;
             transition: var(--transition);
         }
 
-        .input-gold:focus {
+        .select-gold {
+            text-align-last: center;
+            cursor: pointer;
+        }
+
+        .input-gold:focus, .select-gold:focus {
             outline: none;
             border-color: var(--gold-primary);
             box-shadow: 0 0 12px var(--gold-glow);
@@ -262,6 +310,18 @@
         .btn-outline:hover:not(:disabled) {
             background: rgba(212, 175, 55, 0.08);
             color: #fff;
+        }
+
+        .btn-tutorial {
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            margin-top: 10px;
+        }
+
+        .btn-tutorial:hover {
+            color: var(--gold-primary);
+            border-color: var(--gold-border);
         }
 
         .divider {
@@ -342,7 +402,7 @@
         .insert-btn {
             width: 100%;
             padding: 12px;
-            margin: 6px 0;
+            margin: 4px 0;
             background: rgba(212, 175, 55, 0.03);
             border: 1px dashed var(--gold-border);
             border-radius: 8px;
@@ -394,6 +454,100 @@
             margin: 8px 0;
         }
 
+        /* MODAIS DE END GAME E TUTORIAL */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-card {
+            background: var(--bg-card);
+            border: 2px solid var(--gold-primary);
+            border-radius: 16px;
+            padding: 40px 30px;
+            width: 90%;
+            max-width: 480px;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(0,0,0,0.9);
+            transform: scale(0.8);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .modal-overlay.active .modal-card {
+            transform: scale(1);
+        }
+
+        .modal-title {
+            font-family: var(--font-title);
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+        }
+
+        .modal-title.win {
+            color: var(--success);
+            text-shadow: 0 0 20px rgba(46, 204, 113, 0.5);
+        }
+
+        .modal-title.lose {
+            color: var(--danger);
+            text-shadow: 0 0 20px rgba(231, 76, 60, 0.5);
+        }
+
+        .modal-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+
+        .modal-icon.win { color: #f1c40f; animation: bounce 1.5s infinite; }
+        .modal-icon.lose { color: var(--danger); animation: pulse 1.5s infinite; }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        .modal-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 25px;
+        }
+
+        .tutorial-content {
+            text-align: left;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--text-main);
+            max-height: 350px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .tutorial-content h4 {
+            color: var(--gold-light);
+            margin: 14px 0 6px 0;
+            font-family: var(--font-title);
+        }
+
         @media (max-width: 600px) {
             header { padding: 12px 16px; }
             .header-logo { height: 28px; }
@@ -415,7 +569,11 @@
             </button>
         </div>
 
-        <div class="game-hud" id="hud">
+        <div class="game-hud" id="hud" style="display: none;">
+            <div class="hud-item" id="timerHud" style="display: none;">
+                <label><i class="fa-solid fa-clock"></i> Tempo</label>
+                <span class="timer-badge" id="timerValue">00s</span>
+            </div>
             <div class="hud-item">
                 <label>Vidas</label>
                 <div class="lives-container" id="lives-container">
@@ -438,6 +596,15 @@
             <img src="/static/banner.png" alt="INTERVALO" class="main-logo-img">
             <p class="subtitle">Jogo de Associação & Estratégia</p>
 
+            <div class="form-group">
+                <label>Modo de Jogo</label>
+                <select id="modeSelect" class="select-gold">
+                    <option value="normal">Normal (Sem tempo | 3 vidas)</option>
+                    <option value="hard">Difícil (1m 20s por rodada | 3 vidas)</option>
+                    <option value="hardcore">Hardcore (40s por rodada | 1 vida)</option>
+                </select>
+            </div>
+
             <button class="btn" onclick="createRoom()">
                 <i class="fa-solid fa-plus"></i> Criar Nova Sala
             </button>
@@ -450,6 +617,10 @@
 
             <button class="btn btn-outline" onclick="joinRoom()">
                 <i class="fa-solid fa-right-to-bracket"></i> Entrar na Sala
+            </button>
+
+            <button class="btn btn-tutorial" onclick="openTutorial()">
+                <i class="fa-solid fa-book-open"></i> Como Jogar
             </button>
         </div>
 
@@ -477,7 +648,7 @@
                 <div class="secret-number" id="secretNumber">--</div>
                 
                 <div class="form-group">
-                    <input id="clueInput" type="text" class="input-gold" placeholder="Digite a pista" autocomplete="off">
+                    <input id="clueInput" type="text" class="input-gold" placeholder="Digite a pista (sem espaços)" autocomplete="off">
                 </div>
                 <button class="btn" onclick="submitClue()">
                     <i class="fa-solid fa-paper-plane"></i> Enviar Pista
@@ -491,7 +662,7 @@
                 <p style="font-size: 0.85rem; color: var(--text-muted);">Escolha em qual posição da sequência a pista deve ser inserida:</p>
             </div>
 
-            <!-- SEQUÊNCIA DE CARTAS (HTML/CSS DINÂMICO) -->
+            <!-- SEQUÊNCIA DE CARTAS -->
             <div style="margin-top: 20px;">
                 <h3 style="font-family: var(--font-title); font-size: 1rem; letter-spacing: 2px; color: var(--gold-light); margin-bottom: 12px; text-align: center;">SEQUÊNCIA ATUAL</h3>
                 <div id="elementsContainer" style="display: flex; flex-direction: column; gap: 8px;"></div>
@@ -501,17 +672,65 @@
         </div>
     </main>
 
+    <!-- MODAL FIM DE JOGO -->
+    <div id="endGameModal" class="modal-overlay">
+        <div class="modal-card">
+            <div id="modalIcon" class="modal-icon"></div>
+            <h2 id="modalTitle" class="modal-title"></h2>
+            <p id="modalDesc" style="color: var(--text-muted); margin-bottom: 20px;"></p>
+            
+            <div class="modal-actions">
+                <button class="btn" onclick="playAgain()">
+                    <i class="fa-solid fa-rotate-right"></i> Jogar Novamente
+                </button>
+                <button class="btn btn-outline" onclick="returnToLobby()">
+                    <i class="fa-solid fa-house"></i> Tela Principal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL TUTORIAL -->
+    <div id="tutorialModal" class="modal-overlay">
+        <div class="modal-card">
+            <h2 class="modal-title" style="color: var(--gold-light);">Como Jogar</h2>
+            <div class="tutorial-content">
+                <h4><i class="fa-solid fa-bullseye"></i> Objetivo</h4>
+                <p>Juntos em dupla, encaixem 10 palavras em ordem numérica crescente de 1 a 100 para vencer a partida!</p>
+                
+                <h4><i class="fa-solid fa-key"></i> Dando Pistas</h4>
+                <p>O jogador da vez vê um número secreto de 1 a 100 e deve enviar uma única palavra como pista que represente visualmente a magnitude desse número.</p>
+                
+                <h4><i class="fa-solid fa-puzzle-piece"></i> Adivinhando</h4>
+                <p>O outro jogador deve analisar a pista enviada e encaixá-la na posição correta entre as cartas já reveladas na mesa.</p>
+
+                <h4><i class="fa-solid fa-triangle-exclamation"></i> Regras Importantes</h4>
+                <p>• Não é permitido usar espaços nas palavras (hífens são aceitos).<br>
+                • Não é permitido repetir palavras já utilizadas na partida.<br>
+                • Se errar a posição, a dupla perde vidas!</p>
+            </div>
+            <div class="modal-actions" style="margin-top: 15px;">
+                <button class="btn btn-outline" onclick="closeTutorial()">Entendi</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const socket = io();
 
         let myPlayer = null;
         let currentState = null;
+        let timerInterval = null;
 
         function createRoom() {
-            socket.emit("create_room");
+            const mode = document.getElementById("modeSelect").value;
+            socket.emit("create_room", { mode: mode });
         }
 
         function returnToLobby() {
+            closeEndGameModal();
+            closeTutorial();
+            clearInterval(timerInterval);
             if (myPlayer !== null) {
                 socket.emit("leave_room");
             }
@@ -541,14 +760,29 @@
         function submitClue() {
             const input = document.getElementById("clueInput");
             const word = input.value.trim();
-            if (word) {
-                socket.emit("submit_clue", { word: word });
-                input.value = "";
+
+            if (!word) return;
+
+            if (/\s/.test(word)) {
+                alert("Não são permitidos espaços na palavra! (Use hífen se necessário).");
+                return;
             }
+
+            if (/\d/.test(word)) {
+                alert("Não são permitidos números na pista.");
+                return;
+            }
+
+            socket.emit("submit_clue", { word: word });
+            input.value = "";
         }
 
         function submitAnswer(position) {
             socket.emit("submit_answer", { position: position });
+        }
+
+        function playAgain() {
+            socket.emit("restart_game");
         }
 
         function updateState(state) {
@@ -561,15 +795,23 @@
             document.getElementById("phaseInfo").textContent = "Fase: " + state.phase;
             document.getElementById("correctInfo").textContent = state.correct_answers + "/10";
 
-            // Atualiza vidas em ícones
-            const hearts = document.querySelectorAll("#lives-container .heart");
-            hearts.forEach((heart, idx) => {
-                if (idx < state.lives) {
-                    heart.classList.remove("lost");
-                } else {
-                    heart.classList.add("lost");
-                }
-            });
+            // Atualização de Vidas HUD
+            const heartsContainer = document.getElementById("lives-container");
+            const maxLives = state.max_lives || 0;
+            heartsContainer.innerHTML = "";
+            for (let i = 0; i < maxLives; i++) {
+                const heart = document.createElement("i");
+                heart.className = i < state.lives ? "fa-solid fa-heart heart" : "fa-solid fa-heart heart lost";
+                heartsContainer.appendChild(heart);
+            }
+
+            if (state.timer_seconds !== null && state.timer_seconds !== undefined && state.phase !== "waiting") {
+                document.getElementById("timerHud").style.display = "flex";
+                startTimer(state.timer_seconds);
+            } else {
+                document.getElementById("timerHud").style.display = "none";
+                clearInterval(timerInterval);
+            }
 
             renderElements(state.elements);
 
@@ -581,11 +823,27 @@
                 document.getElementById("startButton").disabled = true;
             }
 
-            // Gerenciamento visual das fases
             if (state.phase === "waiting") {
                 document.getElementById("secretArea").style.display = "none";
                 document.getElementById("guessArea").style.display = "none";
             }
+        }
+
+        function startTimer(seconds) {
+            clearInterval(timerInterval);
+            let timeLeft = seconds;
+            const timerEl = document.getElementById("timerValue");
+            timerEl.textContent = timeLeft + "s";
+
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    timerEl.textContent = "0s";
+                } else {
+                    timerEl.textContent = timeLeft + "s";
+                }
+            }, 1000);
         }
 
         function renderElements(elements) {
@@ -597,12 +855,10 @@
             const showSlots = isGuessing && isGuesser;
 
             elements.forEach((element, index) => {
-                // Se for a fase de resposta do jogador correspondente, insere o slot de escolha
-                if (showSlots) {
+                if (showSlots && isValidPosition(elements, index)) {
                     container.appendChild(createInsertButton(index));
                 }
 
-                // Renderiza a carta HTML/CSS
                 const card = document.createElement("div");
                 card.className = "card-item";
                 card.innerHTML = `
@@ -612,10 +868,15 @@
                 container.appendChild(card);
             });
 
-            // Slot final de inserção
-            if (showSlots) {
+            if (showSlots && isValidPosition(elements, elements.length)) {
                 container.appendChild(createInsertButton(elements.length));
             }
+        }
+
+        function isValidPosition(elements, position) {
+            const lower = position > 0 ? elements[position - 1].number : 0;
+            const upper = position < elements.length ? elements[position].number : 101;
+            return upper - lower > 1;
         }
 
         function createInsertButton(position) {
@@ -626,7 +887,45 @@
             return btn;
         }
 
-        // Socket Events
+        function triggerFlash(type) {
+            document.body.classList.remove("flash-success", "flash-error");
+            void document.body.offsetWidth; // Trigger reflow
+            document.body.classList.add(type === "success" ? "flash-success" : "flash-error");
+        }
+
+        function showEndGameModal(isWin, message) {
+            const modal = document.getElementById("endGameModal");
+            const icon = document.getElementById("modalIcon");
+            const title = document.getElementById("modalTitle");
+            const desc = document.getElementById("modalDesc");
+
+            if (isWin) {
+                icon.className = "modal-icon win fa-solid fa-trophy";
+                title.className = "modal-title win";
+                title.textContent = "VITÓRIA!";
+            } else {
+                icon.className = "modal-icon lose fa-solid fa-skull-crossbones";
+                title.className = "modal-title lose";
+                title.textContent = "DERROTA!";
+            }
+
+            desc.textContent = message;
+            modal.classList.add("active");
+        }
+
+        function closeEndGameModal() {
+            document.getElementById("endGameModal").classList.remove("active");
+        }
+
+        function openTutorial() {
+            document.getElementById("tutorialModal").classList.add("active");
+        }
+
+        function closeTutorial() {
+            document.getElementById("tutorialModal").classList.remove("active");
+        }
+
+        // SOCKET EVENTS
         socket.on("room_created", data => {
             myPlayer = data.player;
             document.getElementById("roomInfo").textContent = "Sala: " + data.room;
@@ -638,10 +937,22 @@
             myPlayer = data.player;
             document.getElementById("roomInfo").textContent = "Sala: " + data.room;
             document.getElementById("playerInfo").textContent = "Jogador: " + myPlayer;
+            document.getElementById("roomInput").value = data.room;
+        });
+
+        socket.on("connect", () => {
+            const room = document.getElementById("roomInput").value.trim().toUpperCase();
+            if (myPlayer !== null && room) {
+                socket.emit("rejoin_room", {
+                    room: room,
+                    player: myPlayer
+                });
+            }
         });
 
         socket.on("room_state", data => {
             document.getElementById("hud").style.display = "flex";
+            closeEndGameModal();
             updateState(data);
         });
 
@@ -674,34 +985,32 @@
             updateState(data.state);
 
             if (data.correct) {
-                document.getElementById("status").textContent = `ACERTO! O número ${data.number} entrou na posição ${data.correct_position}.`;
+                triggerFlash("success");
+                document.getElementById("status").textContent = `ACERTO! O número ${data.number} foi encaixado com sucesso.`;
+            } else if (data.timed_out) {
+                triggerFlash("error");
+                document.getElementById("status").textContent = "TEMPO ESGOTADO! A dupla perdeu uma vida.";
             } else {
-                document.getElementById("status").textContent = `ERRO! O número era ${data.number}. A posição correta era ${data.correct_position}.`;
+                triggerFlash("error");
+                document.getElementById("status").textContent = `ERRO! A palavra "${data.clue}" (${data.number}) estava entre ${data.between_min} e ${data.between_max}.`;
             }
-        });
-
-        socket.on("next_round", data => {
-            updateState(data.state);
         });
 
         socket.on("game_over", data => {
             document.getElementById("secretArea").style.display = "none";
             document.getElementById("guessArea").style.display = "none";
+            clearInterval(timerInterval);
             updateState(data.state);
 
             if (data.result === "win") {
-                document.getElementById("status").textContent = "VITÓRIA! Vocês completaram 10 acertos!";
+                showEndGameModal(true, "Parabéns! Vocês sincronizaram perfeitamente e completaram os 10 acertos!");
             } else {
-                document.getElementById("status").textContent = "FIM DE JOGO! As vidas se esgotaram.";
+                showEndGameModal(false, "As vidas se esgotaram. Mais sorte da próxima vez!");
             }
         });
 
         socket.on("player_disconnected", data => {
-            document.getElementById("status").textContent = `O jogador ${data.player} saiu da partida. Aguardando novo jogador...`;
-            if (currentState) {
-                currentState.players_connected = 1;
-                updateState(currentState);
-            }
+            document.getElementById("status").textContent = `O jogador ${data.player} desconectou. Guardando sala por 15 segundos...`;
         });
 
         socket.on("error_message", data => {

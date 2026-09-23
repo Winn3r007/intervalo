@@ -16,12 +16,25 @@ def carregar_palavras():
 
 
 class Game:
-    def __init__(self):
-        self.lives = 3
+    MODE_SETTINGS = {
+        "normal": {"lives": 3, "timer_seconds": None},
+        "hard": {"lives": 3, "timer_seconds": 80},
+        "hardcore": {"lives": 1, "timer_seconds": 40},
+    }
+
+    def __init__(self, mode="normal"):
+        if mode not in self.MODE_SETTINGS:
+            mode = "normal"
+
+        self.mode = mode
+        self.max_lives = self.MODE_SETTINGS[mode]["lives"]
+        self.timer_seconds = self.MODE_SETTINGS[mode]["timer_seconds"]
+        self.lives = self.max_lives
         self.correct_answers = 0
 
         self.elements = []
         self.used_numbers = set()
+        self.used_words = set()
 
         self.current_number = None
         self.current_word = None
@@ -43,6 +56,10 @@ class Game:
         words = random.sample(palavras, 3)
 
         self.used_numbers.update(numbers)
+        self.used_words.update(
+            word.casefold()
+            for word in words
+        )
 
         self.elements = [
             {
@@ -170,19 +187,39 @@ class Game:
 
         word = word.strip()
 
-        if not word:
+        if (
+            not word
+            or any(character.isspace() for character in word)
+            or any(character.isdigit() for character in word)
+        ):
             return False
 
-        existing_words = {
-            element["word"].strip().casefold()
-            for element in self.elements
-        }
+        normalized_word = word.casefold()
 
-        if word.casefold() in existing_words:
+        if normalized_word in self.used_words:
             return False
 
         self.current_word = word
+        self.used_words.add(normalized_word)
         self.phase = "guessing"
+
+        return True
+
+    def timeout_round(self):
+        if self.phase not in ("clue", "guessing"):
+            return False
+
+        self.lives -= 1
+        game_state = self.is_game_over()
+
+        if game_state is not None:
+            self.phase = game_state
+            return True
+
+        self.switch_player()
+        self.current_number = None
+        self.current_word = None
+        self.phase = "waiting"
 
         return True
 
